@@ -1153,7 +1153,36 @@ extension RulesTests {
             public var publicProperty: Int { 10 }
             public func publicFunction1() {}
             public func publicFunction2() {}
-            func internalFunction() {}
+            internal func internalFunction() {}
+            private func privateFunction() {}
+            fileprivate var privateProperty: Int { 10 }
+        }
+        """
+
+        testFormatting(
+            for: input, output, rule: FormatRules.extensionAccessControl,
+            options: FormatOptions(extensionACLPlacement: .onDeclarations)
+        )
+    }
+
+    func testReducesVisibilityOfExtensionMembersToMatchExtension() {
+        let input = """
+        private extension Foo {
+            var publicProperty: Int { 10 }
+            public func publicFunction1() {}
+            func publicFunction2() {}
+            internal func internalFunction() {}
+            private func privateFunction() {}
+            fileprivate var privateProperty: Int { 10 }
+        }
+        """
+
+        let output = """
+        extension Foo {
+            fileprivate var publicProperty: Int { 10 }
+            fileprivate func publicFunction1() {}
+            fileprivate func publicFunction2() {}
+            fileprivate func internalFunction() {}
             private func privateFunction() {}
             fileprivate var privateProperty: Int { 10 }
         }
@@ -1334,22 +1363,56 @@ extension RulesTests {
         testFormatting(for: input, rule: FormatRules.extensionAccessControl)
     }
 
-    func testUpdatesExtensionThatHasDifferentACLFromBodyDeclarations() {
+    func testUpdatesExtensionThatHasHigherACLThanBodyDeclarations() {
         let input = """
-        private extension Foo {
-            public func bar() {}
-            public func baaz() {}
+        public extension Foo {
+            fileprivate func bar() {}
+            fileprivate func baaz() {}
         }
         """
 
         let output = """
-        public extension Foo {
+        fileprivate extension Foo {
             func bar() {}
             func baaz() {}
         }
         """
 
-        testFormatting(for: input, output, rule: FormatRules.extensionAccessControl)
+        testFormatting(for: input, output, rule: FormatRules.extensionAccessControl,
+                       exclude: ["redundantFileprivate"])
+    }
+
+    func testDoesntHoistPrivateVisibilityFromExtensionBodyDeclarations() {
+        let input = """
+        extension Foo {
+            private var bar() {}
+            private func baaz() {}
+        }
+        """
+
+        testFormatting(for: input, rule: FormatRules.extensionAccessControl)
+    }
+
+    func testDoesntUpdatesExtensionThatHasLowerACLThanBodyDeclarations() {
+        let input = """
+        private extension Foo {
+            public var bar() {}
+            public func baaz() {}
+        }
+        """
+
+        testFormatting(for: input, rule: FormatRules.extensionAccessControl)
+    }
+
+    func testDoesntReduceVisibilityOfImplicitInternalDeclaration() {
+        let input = """
+        extension Foo {
+            fileprivate var bar() {}
+            func baz() {}
+        }
+        """
+
+        testFormatting(for: input, rule: FormatRules.extensionAccessControl)
     }
 
     func testUpdatesExtensionThatHasRedundantACLOnBodyDeclarations() {
